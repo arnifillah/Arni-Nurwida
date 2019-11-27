@@ -1,0 +1,283 @@
+#####search
+####1.pupr
+###twitter app
+library(twitteR)
+consumer_key<-
+consumer_secret<-
+access_token<-
+access_secret<-
+setup_twitter_oauth(consumer_key,consumer_secret,access_token,access_secret)
+
+###extract twitter tweets
+library(twitteR)
+library(rtweet)
+tw01<-searchTwitter("PUPR",n=10000)
+tw01_df=twListToDF(tw01)
+user<-unique(tw01_df$screenName)
+text<-unique(tw01_df$text)
+length(user)
+tw02<-searchTwitter("Kementerian+Pekerjaan+Umum+dan+Perumahan+Rakyat",n=10000)
+tw02_df=twListToDF(tw02)
+tw03<-searchTwitter("Kementerian+Pekerjaan+Umum",n=10000)
+tw03_df=twListToDF(tw03)
+tw04<-searchTwitter("Kementerian+PUPR",n=10000)
+tw04_df=twListToDF(tw04)
+tw05<-searchTwitter("Kementerian+PU",n=10000)
+tw05_df=twListToDF(tw05)
+tw06<-searchTwitter("Kemen+PUPR",n=10000)
+tw06_df=twListToDF(tw06)
+tw07<-searchTwitter("Kemen+PU",n=10000)
+tw07_df=twListToDF(tw07)
+twall<-rbind(tw01_df,tw02_df,tw03_df,tw04_df,tw05_df,tw06_df,tw07_df)
+twall2<-unique(twall)
+lapply(twall2,function(x)write.table(data.frame(x),'D:/2019/Tugas/Infografis/twall2.csv',append=TRUE,sep=','))
+library(xlsx)
+write.xlsx(tw01_df,file="D:/2019/Tugas/Infografis/tw01_df2.xlsx",sheetName="All",row.names=FALSE)
+capture.output(twall2,file='D:/2019/Tugas/Infografis/twall3.csv')
+
+###word cloud analysis
+##input data
+library(Rcpp)
+library(tm)
+#1
+##corpus from vector of tweets
+tw01_corpus<-Corpus(VectorSource(tw01_df$text))
+inspect(tw01_corpus[1])
+##cleaning(lower cases,remove numbers,cut out stopwords,remove punctuation,strip whitespace)
+tw01_clean1<-tm_map(tw01_corpus,content_transformer(function(x)gsub('http\\S+t.co\\S+','',x)))
+library(data.table)
+stopwords_id<-data.frame(fread("D:/2019/Tugas/Infografis/stopwords_id.csv",header=T,sep=";"))
+tw01_clean2<-TermDocumentMatrix(tw01_clean1,
+	control=list(stripWhitespace=TRUE,tolower=TRUE,
+			removeNumbers=TRUE,
+			removePunctuation=TRUE,
+			stopwords=c(stopwords_id[,1])))
+tw01_matrix<-as.matrix(tw01_clean2)
+tw01_freq1<-sort(rowSums(tw01_matrix),decreasing=TRUE)
+tw01_freq2<-tw01_freq1[tw01_freq1>0]
+tw01_final<-data.frame(word=names(tw01_freq2),freq=tw01_freq2)
+head(tw01_final)
+dim(tw01_final)
+library(xlsx)
+write.xlsx(tw01_final,file="D:/2019/Tugas/Infografis/tw01_final.xlsx",sheetName="All",row.names=FALSE)
+
+library(wordcloud)
+wordcloud(head(tw01_final$word,200),head(tw01_final$freq,100),random.order=F,colors=c("deepskyblue","deepskyblue1","deepskyblue2","deepskyblue3","deepskyblue3","deepskyblue4","deepskyblue4"))
+
+#2
+##corpus from vector of tweets
+tw01_corpus<-Corpus(VectorSource(text))
+inspect(tw01_corpus[1])
+##cleaning(lower cases,remove numbers,cut out stopwords,remove punctuation,strip whitespace)
+tw01_clean1<-tm_map(tw01_corpus,content_transformer(function(x)gsub('http\\S+t.co\\S+','',x)))
+library(data.table)
+stopwords_id<-data.frame(fread("D:/2019/Tugas/Infografis/stopwords_id.csv",header=T,sep=";"))
+tw01_clean2<-TermDocumentMatrix(tw01_clean1,
+	control=list(stripWhitespace=TRUE,tolower=TRUE,
+			removeNumbers=TRUE,
+			removePunctuation=TRUE,
+			stopwords=c(stopwords_id[,1])))
+tw01_matrix<-as.matrix(tw01_clean2)
+tw01_freq1<-sort(rowSums(tw01_matrix),decreasing=TRUE)
+tw01_freq2<-tw01_freq1[tw01_freq1>0]
+tw01_final<-data.frame(word=names(tw01_freq2),freq=tw01_freq2)
+head(tw01_final)
+dim(tw01_final)
+library(wordcloud)
+wordcloud(head(tw01_final$word,100),head(tw01_final$freq,100),random.order=F,colors=c("deepskyblue1","deepskyblue2","deepskyblue3","deepskyblue4","deepskyblue4","deepskyblue4","deepskyblue4","deepskyblue4"))
+
+###wordcloud2
+library(wordcloud2)
+redPalette<-c("#5c1010","#6f0000","#560d0d","#c30101","#940000")
+redPalette
+bluePalette<-c("deepskyblue","deepskyblue1","deepskyblue2","deepskyblue3","deepskyblue4")
+wordcloud2(tw01_final,size=1,color=rep_len(bluePalette,nrow(tw01_final)),gridSize=1.5,minRotation=-pi/10,maxRotation=-pi/15)
+
+###tweets count by time
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(twitteR)
+library(rtweet)
+pupr_tweet_times<-tw01_df %>% 
+		mutate(weekday=wday(created,label=TRUE),
+			month=month(created,label=TRUE),
+			hour=hour(created),
+			month_over_time=round_date(created,"month"))
+
+#1
+plotSentByTime1<-function(pupr_tweet_times,timeGroupVar){
+	timeVar<-substitute(timeGroupVar)
+	timeVarLabel<-stringr::str_to_title(timeVar)
+	
+	pupr_tweet_time_sent<-pupr_tweet_times %>% 
+		rename_(timeGroup=timeVar) %>% 
+		group_by(timeGroup) %>% 
+		summarise(Count=n()) %>% 
+		ungroup()
+	
+	theme_set(theme_classic())
+	ggplot(pupr_tweet_time_sent,aes(x=timeGroup,y=Count))+
+		geom_line(colour="deepskyblue3",size=1)+ 
+		geom_point(colour="darkred",size=1)+
+		xlab("Waktu (WIB)")+ylab("Jumlah Cuitan")+ylim(0,500)+
+		geom_text(aes(label=Count),position=position_dodge(0.9),vjust=-0.75,size=2.75)+
+		scale_x_continuous(breaks=c(0,3,6,9,12,15,18,21),labels=c("00:00","03:00","06:00","09:00","12:00","15:00","18:00","21:00"))
+}
+plotSentByTime1(pupr_tweet_times,hour)
+
+plotSentByTime2<-function(pupr_tweet_times,timeGroupVar){
+	timeVar<-substitute(timeGroupVar)
+	timeVarLabel<-stringr::str_to_title(timeVar)
+	
+	pupr_tweet_time_sent<-pupr_tweet_times %>% 
+		rename_(timeGroup=timeVar) %>% 
+		group_by(timeGroup) %>% 
+		summarise(Count=n()) %>% 
+		ungroup()
+	
+	theme_set(theme_classic())
+	ggplot(pupr_tweet_time_sent,aes(x=timeGroup,y=Count,group=1))+
+    		geom_line(colour="deepskyblue3",size=1) + 
+    		geom_point(colour="darkred",size=1)+
+		xlab("Hari")+ylab("Jumlah Cuitan")+ylim(0,2500)+
+		geom_text(aes(label=Count),position=position_dodge(0.9),vjust=-0.75,size=2.75)+
+		scale_x_discrete(breaks=c("Minggu","Sen","Sel","Rabu","Kamis","Jumat","Sabtu"),labels=c("Minggu","Senin","Selasa","Rabu","Kamis","Jum'at","Sabtu"))
+}
+plotSentByTime2(pupr_tweet_times,weekday)
+
+library(xlsx)
+write.xlsx(pupr_tweet_times,file="D:/2019/Tugas/Infografis/pupr_tweet_times.xlsx",sheetName="All",row.names=FALSE)
+
+#2
+pupr_tweet_times<-tw01_df %>% 
+		mutate(weekday=wday(created,label=TRUE),
+			month=month(created,label=TRUE),
+			hour=hour(created),
+			month_over_time=round_date(created,"month"))
+
+plotSentByTime1<-function(pupr_tweet_times,timeGroupVar){
+	timeVar<-substitute(timeGroupVar)
+	timeVarLabel<-stringr::str_to_title(timeVar)
+	
+	pupr_tweet_time_sent<-pupr_tweet_times %>% 
+		rename_(timeGroup=timeVar) %>% 
+		group_by(timeGroup) %>% 
+		summarise(Count=n()) %>% 
+		ungroup()
+	
+	theme_set(theme_classic())
+	ggplot(pupr_tweet_time_sent,aes(x=timeGroup,y=Count)) +
+		geom_bar(stat="identity",fill="deepskyblue3")+
+		xlab("Jam")+ylab("Jumlah Tweet")+ylim(0,500)+
+		geom_text(aes(label=Count),position=position_dodge(0.9),vjust=-0.5,size=2)+
+		scale_x_continuous(breaks=c(0,3,6,9,12,15,18,21),labels=c("00:00","03:00","06:00","09:00","12:00","15:00","18:00","21:00"))
+}
+plotSentByTime1(pupr_tweet_times,hour)
+
+plotSentByTime2<-function(pupr_tweet_times,timeGroupVar){
+	timeVar<-substitute(timeGroupVar)
+	timeVarLabel<-stringr::str_to_title(timeVar)
+	
+	pupr_tweet_time_sent<-pupr_tweet_times %>% 
+		rename_(timeGroup=timeVar) %>% 
+		group_by(timeGroup) %>% 
+		summarise(Count=n()) %>% 
+		ungroup()
+	
+	theme_set(theme_classic())
+	ggplot(pupr_tweet_time_sent,aes(x=timeGroup,y=Count)) +
+		geom_bar(stat="identity",fill="deepskyblue3")+
+		xlab("Hari")+ylab("Jumlah Tweet")+ylim(0,2500)+
+		geom_text(aes(label=Count),position=position_dodge(0.9),vjust=-0.5,size=2)+
+		scale_x_discrete(breaks=c("Minggu","Sen","Sel","Rabu","Kamis","Jumat","Sabtu"),labels=c("Minggu","Senin","Selasa","Rabu","Kamis","Jum'at","Sabtu"))
+}
+plotSentByTime2(pupr_tweet_times,weekday)
+
+###favorited tweets & retweet most
+tw01_df[which(tw01_df$favoriteCount==max(tw01_df$favoriteCount)),]
+tw01_df[which(tw01_df$retweetCount==max(tw01_df$retweetCount)),1]
+d1<-as.data.frame(table(as.factor(tw01_df[,3])))
+d2<-as.data.frame(table(as.factor(tw01_df[,12])))
+d1[which(as.numeric(d1$Var1)==max(as.numeric(d1$Var1))),]
+d2[which(as.numeric(d2$Var1)==max(as.numeric(d2$Var1))),]
+
+data1<-tw01_df[,c(3,8)]
+data1<-data1[order(data1$favoriteCount,decreasing=T),]
+data1<-data1[c(1:20),]
+newdata1<-transform(data1,id=reorder(id,favoriteCount))
+library(reshape2)
+melted1<-melt(newdata1,id="id")
+library(ggplot2)
+theme_set(theme_classic())
+ggplot(melted1,aes(x=id,y=value))+geom_bar(stat="identity",fill="deepskyblue3")+
+	xlab("ID Cuitan")+ylab("Jumlah Favorit")+coord_flip()+ylim(0,15000)+
+	geom_text(aes(label=value),hjust=-0.1,vjust=0.25,size=2.5)
+
+data2<-tw01_df[,c(12,8)]
+data2<-data2[order(data2$retweetCount,decreasing=T),]
+data2<-data2[c(1:20),]
+newdata2<-transform(data2,id=reorder(id,retweetCount))
+library(reshape2)
+melted2<-melt(newdata2,id="id")
+library(ggplot2)
+theme_set(theme_classic())
+ggplot(melted2,aes(x=id,y=value))+geom_bar(stat="identity",fill="deepskyblue3")+
+	xlab("ID Tweet")+ylab("Jumlah Retweet")+coord_flip()+ylim(0,15000)+
+	geom_text(aes(label=value),hjust=-0.1,vjust=0.25,size=2.5)
+
+###hashtag
+vec1=tw01_df$text
+extract.hashes=function(vec){
+	hash.pattern="#[[:alpha:]]+"
+	have.hash=grep(x=vec,pattern=hash.pattern)
+	hash.matches=gregexpr(pattern=hash.pattern,text=vec[have.hash])
+	extracted.hash=regmatches(x=vec[have.hash],m=hash.matches)
+ 
+	df=data.frame(table(tolower(unlist(extracted.hash))))
+	colnames(df)=c("tag","freq")
+	df=df[order(df$freq,decreasing=TRUE),]
+	return(df)
+	}
+
+data3=head(extract.hashes(vec1),20)
+library(xlsx)
+write.xlsx(data3,file="D:/2019/Tugas/Infografis/data3.xlsx",sheetName="All",row.names=FALSE)
+library(data.table)
+data3<-data.frame(fread("D:/2019/Tugas/Infografis/data32.csv",header=T,sep=";"))
+newdata3<-transform(data3,tag=reorder(tag,freq))
+library(reshape2)
+melted3<-melt(newdata3,id="tag")
+library(ggplot2)
+theme_set(theme_classic())
+ggplot(melted3,aes(x=tag,y=value))+geom_bar(stat="identity",fill="deepskyblue3")+
+	xlab("Hashtag")+ylab("Jumlah Cuitan")+coord_flip()+ylim(0,200)+
+	geom_text(aes(label=value),hjust=-0.1,vjust=0.25,size=2.5)
+
+###mentioned
+vec1=tw01_df$text
+extract.mentes=function(vec){
+	ment.pattern="@[[:alpha:]]+"
+	have.ment=grep(x=vec,pattern=ment.pattern)
+	ment.matches=gregexpr(pattern=ment.pattern,text=vec[have.ment])
+	extracted.ment=regmatches(x=vec[have.ment],m=ment.matches)
+ 
+	df=data.frame(table(tolower(unlist(extracted.ment))))
+	colnames(df)=c("ment","freq")
+	df=df[order(df$freq,decreasing=TRUE),]
+	return(df)
+	}
+
+data4=head(extract.mentes(vec1),20)
+library(xlsx)
+write.xlsx(data4,file="D:/2019/Tugas/Infografis/data4.xlsx",sheetName="All",row.names=FALSE)
+library(data.table)
+data4<-data.frame(fread("D:/2019/Tugas/Infografis/data42.csv",header=T,sep=";"))
+newdata4<-transform(data4,ment=reorder(ment,freq))
+library(reshape2)
+melted4<-melt(newdata4,id="ment")
+library(ggplot2)
+theme_set(theme_classic())
+ggplot(melted4,aes(x=ment,y=value))+geom_bar(stat="identity",fill="deepskyblue3")+
+	xlab("Mention")+ylab("Jumlah Cuitan")+coord_flip()+ylim(0,2000)+
+	geom_text(aes(label=value),hjust=-0.1,vjust=0.25,size=2.5)
